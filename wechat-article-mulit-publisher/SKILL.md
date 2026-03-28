@@ -28,27 +28,30 @@ description: 从 Markdown 文件或网页链接提取文章并发布到微信公
       "app_id": "wx...",
       "app_secret": "...",
       "author": "作者",
-      "default_template": "standard"
+      "default_template": "standard",
+      "topics": ["科技", "AI", "人工智能"]
     },
     "account2": {
       "name": "第二个公众号",
       "app_id": "wx...",
       "app_secret": "...",
       "author": "作者",
-      "default_template": "viral"
+      "default_template": "viral",
+      "topics": ["汽车", "新能源", "电动车"]
     }
   }
 }
 ```
 
-| 字段                          | 必填 | 说明                           |
-| ----------------------------- | ---- | ------------------------------ |
-| `default_account`             | 是   | 默认使用的账号名               |
-| `accounts[].name`             | 是   | 公众号名称（显示用）           |
-| `accounts[].app_id`           | 是   | 微信公众号 AppID               |
-| `accounts[].app_secret`       | 是   | 微信公众号 AppSecret           |
-| `accounts[].author`           | 否   | 默认作者，可被 `--author` 覆盖 |
-| `accounts[].default_template` | 否   | 默认模板，默认 `standard`      |
+| 字段                          | 必填 | 说明                               |
+| ----------------------------- | ---- | ---------------------------------- |
+| `default_account`             | 是   | 默认使用的账号名                   |
+| `accounts[].name`             | 是   | 公众号名称（显示用）               |
+| `accounts[].app_id`           | 是   | 微信公众号 AppID                   |
+| `accounts[].app_secret`       | 是   | 微信公众号 AppSecret               |
+| `accounts[].author`           | 否   | 默认作者，可被 `--author` 覆盖     |
+| `accounts[].default_template` | 否   | 默认模板，默认 `standard`          |
+| `accounts[].topics`           | 否   | 公众号相关领域关键词，用于自动匹配 |
 
 ## 安装依赖
 

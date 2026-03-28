@@ -124,6 +124,30 @@ def get_account_config(cfg: dict[str, Any], account_name: str | None) -> dict[st
     return accounts[account_name]
 
 
+def auto_match_account(cfg: dict[str, Any], content: str) -> dict[str, Any]:
+    """根据文章内容自动匹配最合适的账号。"""
+    accounts = cfg["accounts"]
+    if not content:
+        return get_account_config(cfg, None)
+
+    content_lower = content.lower()
+    best_match = None
+    best_score = 0
+
+    for name, acc in accounts.items():
+        topics = acc.get("topics", [])
+        if not topics:
+            continue
+        score = sum(1 for topic in topics if topic.lower() in content_lower)
+        if score > best_score:
+            best_score = score
+            best_match = name
+
+    if best_match:
+        return accounts[best_match]
+    return get_account_config(cfg, None)
+
+
 def list_accounts(cfg: dict[str, Any]) -> list[dict[str, str]]:
     """列出所有配置的账号信息。"""
     default = cfg.get("default_account", "")
@@ -133,6 +157,7 @@ def list_accounts(cfg: dict[str, Any]) -> list[dict[str, str]]:
             "is_default": name == default,
             "author": acc.get("author", ""),
             "default_template": acc.get("default_template", "standard"),
+            "topics": acc.get("topics", []),
         }
         for name, acc in cfg["accounts"].items()
     ]
@@ -991,13 +1016,6 @@ def main() -> None:
     if not args.input:
         raise RuntimeError("缺少输入参数：请传入 Markdown 文件路径或 URL")
 
-    # 获取指定账号的配置
-    wechat_cfg = get_account_config(cfg, args.account.strip() or None)
-
-    template = (args.template or wechat_cfg.get("default_template") or "viral").strip().lower()
-    if template not in {"standard", "viral"}:
-        template = "standard"
-    author = (args.author or wechat_cfg.get("author") or "").strip()
     input_value = args.input.strip()
 
     if is_url(input_value):
@@ -1009,6 +1027,17 @@ def main() -> None:
         if not input_path.exists():
             raise RuntimeError(f"文件不存在: {input_path}")
         article = extract_from_markdown(input_path, source_url_override=args.source_url.strip())
+
+    if args.account.strip():
+        wechat_cfg = get_account_config(cfg, args.account.strip())
+    else:
+        wechat_cfg = auto_match_account(cfg, article.content)
+        print(json.dumps({"mode": "auto-match", "account": wechat_cfg.get("name", "unknown")}, ensure_ascii=False), file=sys.stderr)
+
+    template = (args.template or wechat_cfg.get("default_template") or "viral").strip().lower()
+    if template not in {"standard", "viral"}:
+        template = "standard"
+    author = (args.author or wechat_cfg.get("author") or "").strip()
 
     article.content = optimize_for_wechat_html(article.content, template=template)
 
