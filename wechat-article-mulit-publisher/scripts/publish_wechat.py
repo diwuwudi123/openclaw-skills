@@ -28,6 +28,8 @@ except Exception:
 
 TOKEN_URL = "https://api.weixin.qq.com/cgi-bin/token"
 DRAFT_ADD_URL = "https://api.weixin.qq.com/cgi-bin/draft/add"
+DRAFT_BATCHGET_URL = "https://api.weixin.qq.com/cgi-bin/draft/batchget"
+DRAFT_DELETE_URL = "https://api.weixin.qq.com/cgi-bin/draft/delete"
 PUBLISH_SUBMIT_URL = "https://api.weixin.qq.com/cgi-bin/freepublish/submit"
 PUBLISH_GET_URL = "https://api.weixin.qq.com/cgi-bin/freepublish/get"
 MATERIAL_ADD_URL = "https://api.weixin.qq.com/cgi-bin/material/add_material"
@@ -885,6 +887,26 @@ class WeChatClient:
             raise WeChatPublishError(f"publish get failed: {data}")
         return data
 
+    def get_drafts(self, token: str, offset: int = 0, count: int = 20, no_content: int = 1) -> dict[str, Any]:
+        data = self._post_json_utf8(
+            DRAFT_BATCHGET_URL,
+            {"access_token": token},
+            {"offset": offset, "count": count, "no_content": no_content},
+        )
+        if data.get("errcode", 0) != 0:
+            raise WeChatPublishError(f"draft batchget failed: {data}")
+        return data
+
+    def delete_draft(self, token: str, media_id: str) -> dict[str, Any]:
+        data = self._post_json_utf8(
+            DRAFT_DELETE_URL,
+            {"access_token": token},
+            {"media_id": media_id},
+        )
+        if data.get("errcode", 0) != 0:
+            raise WeChatPublishError(f"draft delete failed: {data}")
+        return data
+
 
 def parse_args() -> argparse.Namespace:
     default_config = Path(__file__).resolve().parent.parent / "config.json"
@@ -902,6 +924,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--publish", action="store_true", help="Submit draft for publish")
     parser.add_argument("--status", action="store_true", help="Query publish status once")
     parser.add_argument("--install", action="store_true", help="Install Python dependencies")
+    parser.add_argument("--list-drafts", action="store_true", help="List all drafts")
+    parser.add_argument("--delete-draft", default="", help="Delete a draft by media_id")
     return parser.parse_args()
 
 
@@ -919,6 +943,49 @@ def main() -> None:
     if args.list_accounts:
         accounts = list_accounts(cfg)
         print(json.dumps({"success": True, "accounts": accounts}, ensure_ascii=False, indent=2))
+        return
+
+    # 列出草稿箱
+    if args.list_drafts:
+        wechat_cfg = get_account_config(cfg, args.account.strip() or None)
+        app_id = (wechat_cfg.get("app_id") or "").strip()
+        app_secret = (wechat_cfg.get("app_secret") or "").strip()
+        if not app_id or not app_secret:
+            raise RuntimeError("配置缺少 app_id 或 app_secret")
+        client = WeChatClient(app_id=app_id, app_secret=app_secret, timeout=args.timeout)
+        token = client.get_token()
+        drafts_data = client.get_drafts(token)
+        items = drafts_data.get("item_count", 0)
+        draft_list = []
+        for item in drafts_data.get("item", []):
+            news_item = item.get("content", {}).get("news_item", [])
+            for news in news_item:
+                draft_list.append({
+                    "media_id": item.get("media_id", ""),
+                    "title": news.get("title", ""),
+                    "author": news.get("author", ""),
+                    "digest": news.get("digest", ""),
+                    "update_time": item.get("update_time", 0),
+                })
+        print(json.dumps({
+            "success": True,
+            "total": drafts_data.get("total_count", 0),
+            "items": items,
+            "drafts": draft_list,
+        }, ensure_ascii=False, indent=2))
+        return
+
+    # 删除草稿
+    if args.delete_draft:
+        wechat_cfg = get_account_config(cfg, args.account.strip() or None)
+        app_id = (wechat_cfg.get("app_id") or "").strip()
+        app_secret = (wechat_cfg.get("app_secret") or "").strip()
+        if not app_id or not app_secret:
+            raise RuntimeError("配置缺少 app_id 或 app_secret")
+        client = WeChatClient(app_id=app_id, app_secret=app_secret, timeout=args.timeout)
+        token = client.get_token()
+        client.delete_draft(token, args.delete_draft.strip())
+        print(json.dumps({"success": True, "deleted": args.delete_draft.strip()}, ensure_ascii=False))
         return
 
     if not args.input:

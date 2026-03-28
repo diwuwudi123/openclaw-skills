@@ -13,6 +13,7 @@ description: 从 Markdown 文件或网页链接提取文章并发布到微信公
 - 支持 `--dry-run` 预览
 - 支持直接发布草稿 `--publish`
 - 文章内图片自动上传：自动将文章中的图片上传到微信素材库并替换为微信 CDN URL
+- 草稿管理：支持列出草稿列表、删除草稿
 
 ## 配置
 
@@ -72,6 +73,12 @@ python scripts/publish_wechat.py <文章.md> --account account2
 
 # 直接发布（跳过草稿直接发布）
 python scripts/publish_wechat.py <文章.md> --publish --status
+
+# 列出草稿箱
+python scripts/publish_wechat.py --list-drafts
+
+# 删除草稿
+python scripts/publish_wechat.py --delete-draft <media_id>
 ```
 
 ## 命令行参数
@@ -87,6 +94,8 @@ python scripts/publish_wechat.py <文章.md> --publish --status
 | `--dry-run`       | 仅渲染预览，不调用微信 API      |
 | `--publish`       | 草稿创建后直接提交发布          |
 | `--status`        | 查询发布状态                    |
+| `--list-drafts`   | 列出草稿箱中的所有草稿          |
+| `--delete-draft`  | 删除指定 media_id 的草稿        |
 
 ## 输出
 
