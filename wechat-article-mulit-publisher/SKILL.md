@@ -12,6 +12,7 @@ description: 从 Markdown 文件或网页链接提取文章并发布到微信公
 - 自动生成封面图（无本地图片时）
 - 支持 `--dry-run` 预览
 - 支持直接发布草稿 `--publish`
+- 文章内图片自动上传：自动将文章中的图片上传到微信素材库并替换为微信 CDN URL
 
 ## 配置
 
@@ -39,14 +40,14 @@ description: 从 Markdown 文件或网页链接提取文章并发布到微信公
 }
 ```
 
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `default_account` | 是 | 默认使用的账号名 |
-| `accounts[].name` | 是 | 公众号名称（显示用） |
-| `accounts[].app_id` | 是 | 微信公众号 AppID |
-| `accounts[].app_secret` | 是 | 微信公众号 AppSecret |
-| `accounts[].author` | 否 | 默认作者，可被 `--author` 覆盖 |
-| `accounts[].default_template` | 否 | 默认模板，默认 `standard` |
+| 字段                          | 必填 | 说明                           |
+| ----------------------------- | ---- | ------------------------------ |
+| `default_account`             | 是   | 默认使用的账号名               |
+| `accounts[].name`             | 是   | 公众号名称（显示用）           |
+| `accounts[].app_id`           | 是   | 微信公众号 AppID               |
+| `accounts[].app_secret`       | 是   | 微信公众号 AppSecret           |
+| `accounts[].author`           | 否   | 默认作者，可被 `--author` 覆盖 |
+| `accounts[].default_template` | 否   | 默认模板，默认 `standard`      |
 
 ## 安装依赖
 
@@ -75,17 +76,17 @@ python scripts/publish_wechat.py <文章.md> --publish --status
 
 ## 命令行参数
 
-| 参数 | 说明 |
-|------|------|
-| `--account` | 指定公众号账号（账号标识名） |
-| `--list-accounts` | 列出所有已配置的账号 |
-| `--template` | 覆盖模板：`standard` 或 `viral` |
-| `--author` | 覆盖作者名 |
-| `--cover-image` | 指定本地封面图路径 |
-| `--source-url` | 覆盖原文链接 |
-| `--dry-run` | 仅渲染预览，不调用微信 API |
-| `--publish` | 草稿创建后直接提交发布 |
-| `--status` | 查询发布状态 |
+| 参数              | 说明                            |
+| ----------------- | ------------------------------- |
+| `--account`       | 指定公众号账号（账号标识名）    |
+| `--list-accounts` | 列出所有已配置的账号            |
+| `--template`      | 覆盖模板：`standard` 或 `viral` |
+| `--author`        | 覆盖作者名                      |
+| `--cover-image`   | 指定本地封面图路径              |
+| `--source-url`    | 覆盖原文链接                    |
+| `--dry-run`       | 仅渲染预览，不调用微信 API      |
+| `--publish`       | 草稿创建后直接提交发布          |
+| `--status`        | 查询发布状态                    |
 
 ## 输出
 

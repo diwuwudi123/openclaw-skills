@@ -31,6 +31,7 @@ DRAFT_ADD_URL = "https://api.weixin.qq.com/cgi-bin/draft/add"
 PUBLISH_SUBMIT_URL = "https://api.weixin.qq.com/cgi-bin/freepublish/submit"
 PUBLISH_GET_URL = "https://api.weixin.qq.com/cgi-bin/freepublish/get"
 MATERIAL_ADD_URL = "https://api.weixin.qq.com/cgi-bin/material/add_material"
+UPLOAD_IMAGE_URL = "https://api.weixin.qq.com/cgi-bin/media/uploadimg"
 
 
 class WeChatPublishError(RuntimeError):
@@ -485,6 +486,78 @@ def optimize_for_wechat_html(content_html: str, template: str = "standard") -> s
     return wrapper
 
 
+def process_content_images(html_content: str, client: WeChatClient, token: str) -> str:
+    soup = BeautifulSoup(html_content, "html.parser")
+    img_tags = soup.find_all("img")
+
+    if not img_tags:
+        return html_content
+
+    for img in list(img_tags):
+        src = (img.get("src") or "").strip()
+        if not src:
+            img.decompose()
+            continue
+
+        if src.startswith(("http://", "https://")):
+            try:
+                new_url = client.upload_content_image_from_url(token, src)
+                if new_url:
+                    img["src"] = new_url
+                else:
+                    img.decompose()
+            except Exception:
+                img.decompose()
+        else:
+            local_path = Path(src)
+            ext = local_path.suffix.lower().lstrip(".")
+            if ext in ("jpg", "jpeg", "png") and local_path.exists():
+                try:
+                    new_url = client.upload_content_image(token, local_path)
+                    if new_url:
+                        img["src"] = new_url
+                    else:
+                        img.decompose()
+                except Exception:
+                    img.decompose()
+            else:
+                img.decompose()
+
+    return str(soup)
+
+
+def compress_image_if_needed(image_path: Path, max_size_bytes: int = 1048576) -> Path:
+    if image_path.stat().st_size <= max_size_bytes:
+        return image_path
+
+    try:
+        from PIL import Image
+    except Exception:
+        return image_path
+
+    ext = image_path.suffix.lower().lstrip(".")
+    if ext not in ("jpg", "jpeg", "png"):
+        return image_path
+
+    output_path = image_path.with_suffix(".compressed.jpg")
+
+    with Image.open(image_path) as img:
+        if img.mode in ("RGBA", "LA"):
+            img = img.convert("RGB")
+
+        quality = 95
+        while quality >= 50:
+            img.save(output_path, "JPEG", quality=quality, optimize=True)
+            if output_path.stat().st_size <= max_size_bytes:
+                return output_path
+            quality -= 5
+
+        if output_path.exists():
+            return output_path
+
+    return image_path
+
+
 def generate_cover_image(title: str, output_path: Path) -> Path | None:
     try:
         from PIL import Image, ImageDraw, ImageFont
@@ -564,8 +637,19 @@ class WeChatClient:
         return json.loads(resp.content.decode("utf-8"))
 
     def upload_image_from_path(self, token: str, image_path: Path) -> str:
-        with image_path.open("rb") as fh:
-            files = {"media": (image_path.name, fh, "image/jpeg")}
+        ext = image_path.suffix.lower().lstrip(".")
+        if ext not in ("jpg", "jpeg", "png"):
+            return ""
+        actual_path = compress_image_if_needed(image_path)
+        actual_ext = actual_path.suffix.lower().lstrip(".")
+        mime_map = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+        }
+        content_type = mime_map.get(actual_ext, "image/jpeg")
+        with actual_path.open("rb") as fh:
+            files = {"media": (actual_path.name, fh, content_type)}
             resp = requests.post(
                 MATERIAL_ADD_URL,
                 params={"access_token": token, "type": "image"},
@@ -585,7 +669,34 @@ class WeChatClient:
         img = requests.get(image_url, timeout=self.timeout)
         img.raise_for_status()
         content_type = img.headers.get("Content-Type", "image/jpeg")
-        files = {"media": ("thumb.jpg", img.content, content_type)}
+        if not content_type.startswith("image/"):
+            return ""
+        ext = "jpg" if "jpeg" in content_type else content_type.split("/")[-1].lower()
+        if ext not in ("jpg", "jpeg", "png"):
+            return ""
+
+        import io
+        image_data = img.content
+        if len(image_data) > 1048576:
+            try:
+                from PIL import Image
+                img_obj = Image.open(io.BytesIO(image_data))
+                if img_obj.mode in ("RGBA", "LA"):
+                    img_obj = img_obj.convert("RGB")
+                output = io.BytesIO()
+                quality = 95
+                while quality >= 50:
+                    output.seek(0)
+                    output.truncate()
+                    img_obj.save(output, "JPEG", quality=quality, optimize=True)
+                    if output.tell() <= 1048576:
+                        image_data = output.getvalue()
+                        break
+                    quality -= 5
+            except Exception:
+                pass
+
+        files = {"media": ("thumb.jpg", image_data, "image/jpeg")}
         resp = requests.post(
             MATERIAL_ADD_URL,
             params={"access_token": token, "type": "image"},
@@ -600,6 +711,82 @@ class WeChatClient:
         if not media_id:
             raise WeChatPublishError("upload image url failed: missing media_id")
         return media_id
+
+    def upload_content_image(self, token: str, image_path: Path) -> str:
+        ext = image_path.suffix.lower().lstrip(".")
+        if ext not in ("jpg", "jpeg", "png"):
+            return ""
+        actual_path = compress_image_if_needed(image_path)
+        actual_ext = actual_path.suffix.lower().lstrip(".")
+        mime_map = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+        }
+        content_type = mime_map.get(actual_ext, "image/jpeg")
+        with actual_path.open("rb") as fh:
+            files = {"media": (actual_path.name, fh, content_type)}
+            resp = requests.post(
+                UPLOAD_IMAGE_URL,
+                params={"access_token": token},
+                files=files,
+                timeout=self.timeout,
+            )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("errcode", 0) != 0:
+            raise WeChatPublishError(f"upload content image failed: {data}")
+        image_url = data.get("url", "")
+        if not image_url:
+            raise WeChatPublishError("upload content image failed: missing url")
+        return image_url
+
+    def upload_content_image_from_url(self, token: str, image_url: str) -> str:
+        img = requests.get(image_url, timeout=self.timeout)
+        img.raise_for_status()
+        content_type = img.headers.get("Content-Type", "image/jpeg")
+        if not content_type.startswith("image/"):
+            return ""
+        ext = "jpg" if "jpeg" in content_type else content_type.split("/")[-1].lower()
+        if ext not in ("jpg", "jpeg", "png"):
+            return ""
+
+        import io
+        image_data = img.content
+        if len(image_data) > 1048576:
+            try:
+                from PIL import Image
+                img_obj = Image.open(io.BytesIO(image_data))
+                if img_obj.mode in ("RGBA", "LA"):
+                    img_obj = img_obj.convert("RGB")
+                output = io.BytesIO()
+                quality = 95
+                while quality >= 50:
+                    output.seek(0)
+                    output.truncate()
+                    img_obj.save(output, "JPEG", quality=quality, optimize=True)
+                    if output.tell() <= 1048576:
+                        image_data = output.getvalue()
+                        break
+                    quality -= 5
+            except Exception:
+                pass
+
+        files = {"media": (f"image.jpg", image_data, "image/jpeg")}
+        resp = requests.post(
+            UPLOAD_IMAGE_URL,
+            params={"access_token": token},
+            files=files,
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("errcode", 0) != 0:
+            raise WeChatPublishError(f"upload content image from url failed: {data}")
+        result_url = data.get("url", "")
+        if not result_url:
+            raise WeChatPublishError("upload content image from url failed: missing url")
+        return result_url
 
     def add_draft(
         self,
@@ -786,6 +973,8 @@ def main() -> None:
 
     client = WeChatClient(app_id=app_id, app_secret=app_secret, timeout=args.timeout)
     token = client.get_token()
+
+    article.content = process_content_images(article.content, client, token)
 
     thumb_media_id = ""
     auto_generate_cover = True
