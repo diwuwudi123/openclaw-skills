@@ -951,6 +951,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--install", action="store_true", help="Install Python dependencies")
     parser.add_argument("--list-drafts", action="store_true", help="List all drafts")
     parser.add_argument("--delete-draft", default="", help="Delete a draft by media_id")
+    parser.add_argument("--upload-material", default="", help="上传本地图片到素材库（传入图片路径）")
+    parser.add_argument("--upload-material-url", default="", help="上传网络图片到素材库（传入图片URL）")
     return parser.parse_args()
 
 
@@ -1011,6 +1013,35 @@ def main() -> None:
         token = client.get_token()
         client.delete_draft(token, args.delete_draft.strip())
         print(json.dumps({"success": True, "deleted": args.delete_draft.strip()}, ensure_ascii=False))
+        return
+
+    # 上传本地图片到素材库
+    if args.upload_material:
+        wechat_cfg = get_account_config(cfg, args.account.strip() or None)
+        app_id = (wechat_cfg.get("app_id") or "").strip()
+        app_secret = (wechat_cfg.get("app_secret") or "").strip()
+        if not app_id or not app_secret:
+            raise RuntimeError("配置缺少 app_id 或 app_secret")
+        client = WeChatClient(app_id=app_id, app_secret=app_secret, timeout=args.timeout)
+        token = client.get_token()
+        image_path = Path(args.upload_material).resolve()
+        if not image_path.exists():
+            raise RuntimeError(f"文件不存在: {image_path}")
+        media_id = client.upload_image_from_path(token, image_path)
+        print(json.dumps({"success": True, "media_id": media_id, "path": str(image_path)}, ensure_ascii=False))
+        return
+
+    # 上传网络图片到素材库
+    if args.upload_material_url:
+        wechat_cfg = get_account_config(cfg, args.account.strip() or None)
+        app_id = (wechat_cfg.get("app_id") or "").strip()
+        app_secret = (wechat_cfg.get("app_secret") or "").strip()
+        if not app_id or not app_secret:
+            raise RuntimeError("配置缺少 app_id 或 app_secret")
+        client = WeChatClient(app_id=app_id, app_secret=app_secret, timeout=args.timeout)
+        token = client.get_token()
+        media_id = client.upload_image_from_url(token, args.upload_material_url.strip())
+        print(json.dumps({"success": True, "media_id": media_id, "url": args.upload_material_url.strip()}, ensure_ascii=False))
         return
 
     if not args.input:
