@@ -17,6 +17,7 @@
 - 自动生成封面图（无本地图片时）
 - 文章内图片自动上传：自动将文章中的图片上传到微信素材库并替换为微信 CDN URL
 - 草稿管理：支持列出草稿列表、删除草稿
+- 素材管理：支持单独上传图片到素材库（本地文件或网络 URL）
 - 支持 `--dry-run` 预览
 - 支持直接发布草稿 `--publish`
 
@@ -69,6 +70,12 @@ python scripts/publish_wechat.py --list-drafts
 
 # 删除草稿
 python scripts/publish_wechat.py --delete-draft <media_id>
+
+# 上传本地图片到素材库
+python scripts/publish_wechat.py --upload-material /path/to/image.jpg
+
+# 上传网络图片到素材库
+python scripts/publish_wechat.py --upload-material-url https://example.com/image.jpg
 ```
 
 #### 命令行参数
@@ -86,6 +93,8 @@ python scripts/publish_wechat.py --delete-draft <media_id>
 | `--status`        | 查询发布状态                    |
 | `--list-drafts`   | 列出草稿箱中的所有草稿          |
 | `--delete-draft`  | 删除指定 media_id 的草稿        |
+| `--upload-material` | 上传本地图片到素材库（传入图片路径） |
+| `--upload-material-url` | 上传网络图片到素材库（传入图片URL） |
 
 ---
 
